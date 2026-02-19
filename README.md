@@ -1,3 +1,7 @@
+git add . 
+git commit -m "qualuqer frase"--no-verify
+git push
+
 # 📊 Sistema de Precificação Consilius Business (v3.4)
 
 Este é o sistema institucional permanente de precificação e geração de orçamentos da **Consilius Business**. A versão 3.4 introduz o suporte a **Templates PDF Profissionais** para propostas comerciais e melhorias de interface.
