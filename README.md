@@ -1,72 +1,75 @@
-git add . 
-git commit -m "qualuqer frase"--no-verify
-git push
 
-# 📊 Sistema de Precificação Consilius Business (v3.4)
+# Sistema de Precificação e Orçamentos - Consilium Business
 
-Este é o sistema institucional permanente de precificação e geração de orçamentos da **Consilius Business**. A versão 3.4 introduz o suporte a **Templates PDF Profissionais** para propostas comerciais e melhorias de interface.
+Este é um sistema interativo desenvolvido em Streamlit para auxiliar na precificação de projetos e na geração de orçamentos e propostas para clientes.
 
----
+## Funcionalidades
 
-## 🚀 Como Instalar e Executar
+- **Calculadora de Orçamento**: Permite inserir dados como horas/dia, dias úteis, número de pessoas, valor da hora, custo operacional e adicionais para calcular diferentes cenários de preço (mínimo, médio, negociação).
+- **Geração de Orçamento (PDF)**: Gera um documento PDF formatado para o cliente com os detalhes da proposta, resumo do projeto, investimento e condições de pagamento.
+- **Geração de Documento Interno (CSV)**: Gera um arquivo CSV com todos os inputs e resultados detalhados dos cálculos para uso interno da equipe.
+- **Log de Ações**: Registra cada orçamento gerado em um arquivo `orcamentos_log.csv` para histórico.
 
-### 1. Instalar o Python
-Se você ainda não tem o Python instalado:
-1. Acesse [python.org](https://www.python.org/downloads/).
-2. Baixe a versão mais recente.
-3. **IMPORTANTE:** Durante a instalação, marque a caixa **"Add Python to PATH"**.
+## Estrutura do Projeto
 
-### 2. Instalar as Bibliotecas Necessárias
-Abra o terminal (ou CMD) e execute:
+- `app.py`: O arquivo principal da aplicação Streamlit, contendo a interface do usuário e a orquestração das funcionalidades.
+- `calculadora.py`: Módulo responsável pela lógica de cálculo do orçamento, validações e formatação de moeda.
+- `documentos.py`: Módulo para a geração dos documentos em PDF (para cliente) e CSV (interno).
+- `config.py`: Arquivo de configuração contendo todas as constantes e textos padrão, facilitando a personalização.
+- `requirements.txt`: Lista de bibliotecas Python necessárias para rodar a aplicação.
+- `orcamentos_log.csv`: Arquivo de log que será criado automaticamente ao gerar orçamentos.
+
+## Como Usar (Localmente)
+
+Siga os passos abaixo para configurar e rodar o sistema em sua máquina local:
+
+### 1. Pré-requisitos
+
+Certifique-se de ter o Python 3.8 ou superior instalado em seu sistema.
+
+### 2. Clonar o Repositório (ou baixar o ZIP)
+
+Se você recebeu um arquivo ZIP, descompacte-o em uma pasta de sua preferência. Se for um repositório Git, clone-o:
+
 ```bash
-pip install streamlit reportlab pandas PyPDF2
+git clone <URL_DO_REPOSITORIO>
+cd streamlit_orcamento
 ```
 
-### 3. Executar o Sistema
-Abra a pasta do projeto no terminal do VS Code e use o comando abaixo:
+### 3. Criar e Ativar um Ambiente Virtual (Recomendado)
+
+É uma boa prática usar um ambiente virtual para gerenciar as dependências do projeto:
 
 ```bash
-python -m streamlit run app.py
+python -m venv venv
+# No Windows:
+.\venv\Scripts\activate
+# No macOS/Linux:
+source venv/bin/activate
 ```
 
----
+### 4. Instalar as Dependências
 
-## 📂 Estrutura do Projeto
+Com o ambiente virtual ativado, instale as bibliotecas necessárias usando o `requirements.txt`:
 
-- **`app.py`**: Interface do usuário (Streamlit).
-- **`pricing.py`**: Lógica matemática institucional.
-- **`services.py`**: Banco de dados de serviços e multiplicadores.
-- **`pdf_generator.py`**: Motor de geração de PDFs (Template + Sobreposição).
-- **`pdf_layout_config.py`**: Configuração de coordenadas (x, y) para o template.
-- **`assets/logo.png`**: Logo oficial da Consilius.
-- **`templates/template_orcamento.pdf`**: Template de 4 páginas para o orçamento.
+```bash
+pip install -r requirements.txt
+```
 
----
+### 5. Rodar a Aplicação Streamlit
 
-## 🛠️ Novidades da Versão 3.4
+Após a instalação das dependências, você pode iniciar a aplicação:
 
-- **Interface Refinada:** Logo pequena no canto superior esquerdo como complemento visual, preservando o título principal.
-- **Layout de PDF Corrigido:** Espaçamento aumentado na primeira página para evitar sobreposição ao design superior.
-- **Nova Estrutura de Páginas:**
-  - **Página 1:** Proposta Comercial, Escopo e Resumo.
-  - **Página 2:** Contextualização (Sobre Consilius e IBMEC).
-  - **Página 3:** Proposta e Execução, Equipe, Modalidade, Etapas e Pagamento.
-- **Rodapé Final:** Footer fixo removido de todas as páginas; agora aparece apenas no final do conteúdo do PDF, de forma discreta.
-- **Placeholders Editáveis:** Campos destacados em vermelho para fácil identificação e edição manual pós-geração.
+```bash
+streamlit run app.py
+```
 
----
+Isso abrirá o aplicativo no seu navegador padrão. Se não abrir automaticamente, copie e cole o URL fornecido no terminal (geralmente `http://localhost:8501`).
 
-## 🛠️ Como Modificar o Sistema
+## Personalização
 
-### Ajustar Posições no PDF
-Se você alterar o design do `template_orcamento.pdf` e os textos ficarem desalinhados, abra o arquivo `pdf_layout_config.py` e ajuste as coordenadas `(x, y)` de cada campo.
+Todas as constantes configuráveis, como valores padrão, margens, textos de rodapé e mensagens, estão centralizadas no arquivo `config.py`. Edite este arquivo para adaptar o sistema às suas necessidades sem modificar a lógica principal da aplicação.
 
-### Alterar a Logo
-Substitua o arquivo em `assets/logo.png`. O sistema atualizará automaticamente na interface e no documento interno.
+## Contato
 
-### Alterar o Template
-Substitua o arquivo em `templates/template_orcamento.pdf`. Certifique-se de que o novo arquivo tenha o mesmo número de páginas ou ajuste a lógica em `pdf_generator.py`.
-
----
-**Consilius Business 2026**  
-*Sistema de Precificação Oficial*
+Para dúvidas ou sugestões, entre em contato com a equipe da Consilium Business.

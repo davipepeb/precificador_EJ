@@ -1,257 +1,239 @@
-"""
-Aplicação Principal - Consilius Business
-Este arquivo contém a interface Streamlit para o sistema de precificação.
-Ele integra todos os módulos para proporcionar uma experiência profissional.
 
-REQUISITOS IMPLEMENTADOS:
-- Logo pequena no canto superior esquerdo (complemento visual).
-- Título "Sistema de Precificação Consilius Business" preservado.
-- Visibilidade controlada por st.session_state.
-- CSS customizado para Dark/Light mode.
-"""
+# -*- coding: utf-8 -*-
 
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 import os
-from services import get_areas, get_services_by_area, get_pricing_params, PORTE_MULTIPLIERS, PRECO_MULTIPLIERS
-from pricing import calculate_pricing
-from pdf_generator import generate_client_pdf, generate_internal_pdf
-from utils import format_currency
-
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(
-    page_title="Consilius Business - Precificação",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+from calculadora import calculate_budget, format_currency, validate_inputs, log_budget_action
+from documentos import generate_proposal_pdf, generate_internal_pdf
+from config import (
+    HORA_PADRAO, HORAS_POR_DIA_PADRAO, DIAS_UTEIS_PADRAO, NUM_PESSOAS_PADRAO,
+    SLIDER_ADICIONAL_MIN, SLIDER_ADICIONAL_MAX,
+    PROPOSTA_PADRAO_PROPONENTE, AVISO_CUSTO_OPERACIONAL, AVISO_CALCULO_NECESSARIO,
+    OPCOES_PAGAMENTO, MARGEM_MINIMA_DEFAULT, MARGEM_MEDIA_DEFAULT, MARGEM_NEGOCIACAO_DEFAULT,
+    LOGO_PATH
 )
 
-# --- ESTILO CSS PERSONALIZADO ---
-st.markdown("""
-    <style>
-    /* Estilização das métricas em destaque */
-    .metric-container {
-        background-color: rgba(26, 58, 95, 0.1);
-        border: 2px solid #1A3A5F;
-        padding: 20px;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    .metric-value {
-        font-size: 2.2em;
-        font-weight: bold;
-        color: #1A3A5F;
-    }
-    .metric-label {
-        font-size: 1.1em;
-        color: #555;
-        margin-bottom: 5px;
-    }
-    
-    /* Ajuste para Dark Mode */
-    @media (prefers-color-scheme: dark) {
-        .metric-container {
-            background-color: rgba(255, 255, 255, 0.05);
-            border-color: #4A90E2;
-        }
-        .metric-value {
-            color: #4A90E2;
-        }
-        .metric-label {
-            color: #CCC;
-        }
-    }
+# ==============================================================================
+#                           CONFIGURAÇÃO DO STREAMLIT
+# ==============================================================================
 
-    /* Botão Calcular */
-    .stButton>button {
-        width: 100%;
-        background-color: #1A3A5F;
-        color: white;
-        border-radius: 8px;
-        height: 3.5em;
-        font-weight: bold;
-        font-size: 1.1em;
-        transition: 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #2E5A88;
-        border-color: #1A3A5F;
-    }
+st.set_page_config(
+    page_title="Sistema de Orçamentos - Consilius",
+    page_icon="💼",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-    /* Rodapé Fixo */
-    .footer {
-        position: fixed;
-        left: 0;
-        bottom: 0;
-        width: 100%;
-        background-color: #f1f1f1;
-        color: #555;
-        text-align: center;
-        padding: 10px;
-        font-size: 0.9em;
-        border-top: 1px solid #ddd;
-        z-index: 999;
-    }
-    @media (prefers-color-scheme: dark) {
-        .footer {
-            background-color: #1e1e1e;
-            color: #aaa;
-            border-top: 1px solid #333;
-        }
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# Remover rodapé padrão do Streamlit e outros elementos
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            footer:after {
+                content:'Sistema de Orçamento SV 1.0 - Consilius Business'; 
+                visibility: visible;
+                display: block;
+                position: relative;
+                padding: 5px;
+                top: 2px;
+                text-align: center;
+            }
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DO ESTADO (SESSION STATE) ---
-if 'calculated' not in st.session_state:
-    st.session_state.calculated = False
-if 'results' not in st.session_state:
-    st.session_state.results = None
+# Inicializar session state
+if 'calculation_results' not in st.session_state:
+    st.session_state.calculation_results = None
 
-# --- CABEÇALHO COM LOGO PEQUENA E TÍTULO ---
-# Logo pequena no canto superior esquerdo como complemento visual
-col_header_1, col_header_2 = st.columns([0.15, 1])
-with col_header_1:
-    logo_path = "assets/logo.png"
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=80) # Logo pequena (80px)
-with col_header_2:
-    st.title("Sistema de Precificação Consilius Business")
+if 'tipo_preco_selecionado' not in st.session_state:
+    st.session_state.tipo_preco_selecionado = 'Preço de negociação'
+
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = "📊 Calculadora"
+
+# ==============================================================================
+#                           INTERFACE PRINCIPAL (LOGO À ESQUERDA)
+# ==============================================================================
+
+# Layout com logo à esquerda do título
+col_logo, col_titulo = st.columns([1, 5])
+
+with col_logo:
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=120)
+    else:
+        st.markdown("<h1>💼</h1>", unsafe_allow_html=True)
+
+with col_titulo:
+    st.markdown(f"""
+        <h1 style='margin-bottom: 0;'>Sistema de Precificação e Orçamentos</h1>
+        <h3 style='margin-top: 0; color: gray;'>Consilius Business</h3>
+        <p style='font-size: 1.1em;'>Gerador de Propostas Técnicas e Orçamentos</p>
+        """, unsafe_allow_html=True)
 
 st.markdown("---")
 
-# --- LAYOUT PRINCIPAL ---
-col_left, col_right = st.columns([1, 1.2], gap="large")
+# Controle de Abas
+tabs = ["📊 Calculadora", "📄 Gerar Orçamento"]
+active_tab = st.radio("Navegação", tabs, index=tabs.index(st.session_state.active_tab), horizontal=True, label_visibility="collapsed")
+st.session_state.active_tab = active_tab
 
-with col_left:
-    st.subheader("🛠️ Configurações do Projeto")
+st.markdown("---")
+
+# ==============================================================================
+#                           ABA 1: CALCULADORA
+# ==============================================================================
+
+if st.session_state.active_tab == "📊 Calculadora":
+    col_inputs, col_results = st.columns([1, 1], gap="large")
     
-    # 1. Seleção de Área e Serviço
-    area_selecionada = st.selectbox("Selecione a Área", get_areas())
-    servicos_disponiveis = get_services_by_area(area_selecionada)
-    servico_selecionado = st.selectbox("Selecione o Serviço", servicos_disponiveis)
-    
-    # Obtém parâmetros base do serviço
-    valor_hora_base, multiplicador_servico = get_pricing_params(area_selecionada, servico_selecionado)
-    
-    # 2. Inputs Operacionais
-    st.markdown("### Operacional")
-    c1, c2 = st.columns(2)
-    with c1:
-        horas_por_dia = st.number_input("Horas por dia", min_value=0.1, value=1.0, step=0.5)
-        total_equipe = st.number_input("Total de pessoas na equipe", min_value=1, value=5)
-    with c2:
-        horas_totais = st.number_input("Horas totais do projeto", min_value=1.0, value=30.0, step=1.0)
-        pessoas_projeto = st.number_input("Pessoas alocadas no projeto", min_value=1, value=3)
-    
-    # 3. Inputs de Negócio
-    st.markdown("### Negócio")
-    c3, c4 = st.columns(2)
-    with c3:
-        porte_empresa = st.selectbox("Porte da Empresa", list(PORTE_MULTIPLIERS.keys()), index=0) # Default: Pequena
-        multiplicador_porte = PORTE_MULTIPLIERS[porte_empresa]
-        percentual_redutor = st.number_input("Redutor percentual (%)", min_value=0, max_value=100, value=50)
+    with col_inputs:
+        st.header("Configurações")
         
-    with c4:
-        tipo_preco = st.selectbox("Tipo de Preço", list(PRECO_MULTIPLIERS.keys()), index=0) # Default: Negociação
-        multiplicador_preco = PRECO_MULTIPLIERS[tipo_preco]
-        custo_operacional = st.number_input("Custo operacional (R$)", min_value=0.0, value=0.0, step=50.0)
-
-    # Botão de Cálculo
-    if st.button("CALCULAR ORÇAMENTO"):
-        st.session_state.results = calculate_pricing(
-            valor_hora_base,
-            multiplicador_servico,
-            horas_por_dia,
-            horas_totais,
-            total_equipe,
-            pessoas_projeto,
-            multiplicador_porte,
-            percentual_redutor,
-            custo_operacional,
-            multiplicador_preco
+        horas_por_dia = st.number_input(
+            "Horas por dia", min_value=0.5, value=float(HORAS_POR_DIA_PADRAO), step=0.5
         )
-        st.session_state.calculated = True
-        st.session_state.inputs = {
-            'area': area_selecionada,
-            'service': servico_selecionado,
-            'valor_hora_base': valor_hora_base,
-            'multiplicador_servico': multiplicador_servico,
-            'horas_por_dia': horas_por_dia,
-            'horas_totais': horas_totais,
-            'total_equipe': total_equipe,
-            'pessoas_projeto': pessoas_projeto,
-            'multiplicador_porte': multiplicador_porte,
-            'percentual_redutor': percentual_redutor,
-            'custo_operacional': custo_operacional,
-            'multiplicador_preco': multiplicador_preco
+        
+        dias_uteis = st.number_input(
+            "Dias úteis", min_value=1.0, value=float(DIAS_UTEIS_PADRAO), step=1.0
+        )
+        
+        num_pessoas = st.number_input(
+            "Número de pessoas", min_value=1.0, value=float(NUM_PESSOAS_PADRAO), step=1.0
+        )
+        
+        valor_hora = st.number_input(
+            "Valor da hora (R$)", min_value=0.0, value=float(HORA_PADRAO), step=5.0
+        )
+        
+        custo_operacional = st.number_input(
+            "Custo operacional (R$)", min_value=0.0, value=0.0, step=50.0
+        )
+        
+        st.subheader("Ajustes")
+        slider_percent = st.slider(
+            "Acréscimo (%)", min_value=SLIDER_ADICIONAL_MIN, max_value=SLIDER_ADICIONAL_MAX,
+            value=0.0, step=0.01
+        )
+        
+        tipo_preco = st.selectbox(
+            "Tipo de preço", ['Preço mínimo', 'Preço médio', 'Preço de negociação'],
+            index=['Preço mínimo', 'Preço médio', 'Preço de negociação'].index(st.session_state.tipo_preco_selecionado)
+        )
+        
+        if st.button("🔢 Calcular", use_container_width=True):
+            is_valid, errors = validate_inputs(horas_por_dia, dias_uteis, num_pessoas, valor_hora)
+            if not is_valid:
+                for error in errors: st.error(error)
+            else:
+                results = calculate_budget(horas_por_dia, dias_uteis, num_pessoas, valor_hora, custo_operacional, slider_percent)
+                st.session_state.calculation_results = results
+                st.session_state.tipo_preco_selecionado = tipo_preco
+                st.success("Cálculo realizado!")
+
+        if st.button("➡️ Ir para Aba 2: Gerar Orçamento", use_container_width=True):
+            if st.session_state.calculation_results:
+                st.session_state.active_tab = "📄 Gerar Orçamento"
+                st.rerun()
+            else:
+                st.error(AVISO_CALCULO_NECESSARIO)
+
+    with col_results:
+        st.header("Resultados")
+        if st.session_state.calculation_results:
+            res = st.session_state.calculation_results
+            
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Mínimo", format_currency(res['precos']['minimo']))
+            c2.metric("Médio", format_currency(res['precos']['medio']))
+            c3.metric("Negociação", format_currency(res['precos']['negociacao']))
+            
+            st.markdown("---")
+            st.subheader("Estatísticas")
+            s1, s2 = st.columns(2)
+            s1.write(f"**Total de Horas:** {res['total_horas']}h")
+            s1.write(f"**Custo Trabalho:** {format_currency(res['custo_trabalho'])}")
+            s2.write(f"**Custo Base:** {format_currency(res['custo_base'])}")
+            s2.write(f"**Acréscimo:** {res['slider_aplicado']*100:.1f}%")
+            
+            st.markdown("---")
+            with st.expander("🔍 Detalhamento Técnico", expanded=True):
+                # Detalhamento em formato de tópicos (texto)
+                st.markdown(f"""
+                - **Horas por dia:** {res['inputs']['horas_por_dia']}
+                - **Dias úteis:** {int(res['inputs']['dias_uteis'])}
+                - **Número de pessoas:** {int(res['inputs']['num_pessoas'])}
+                - **Valor da hora:** {format_currency(res['inputs']['valor_hora'])}
+                - **Custo operacional:** {format_currency(res['inputs']['custo_operacional'])}
+                - **Total de horas:** {res['total_horas']}
+                - **Custo base:** {format_currency(res['custo_base'])}
+                - **Acréscimo aplicado:** {res['slider_aplicado']*100:.1f}%
+                """)
+        else:
+            st.info("Realize o cálculo para ver os resultados aqui.")
+
+# ==============================================================================
+#                           ABA 2: GERAR ORÇAMENTO
+# ==============================================================================
+
+elif st.session_state.active_tab == "📄 Gerar Orçamento":
+    if st.session_state.calculation_results is None:
+        st.error(AVISO_CALCULO_NECESSARIO)
+    else:
+        res = st.session_state.calculation_results
+        st.header("Informações do Orçamento")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            proponente = st.text_input("Proponente", value=PROPOSTA_PADRAO_PROPONENTE)
+            contratante = st.text_input("Contratante / CNPJ", placeholder="Nome da Empresa / CNPJ")
+            titulo = st.text_input("Título / Tema")
+        with col2:
+            resumo_projeto = st.text_area("Resumo do Projeto", height=100)
+        
+        tipo_preco_key = st.session_state.tipo_preco_selecionado.lower().replace(" ", "_").replace("preço_", "")
+        valor_selecionado = res['precos'].get(tipo_preco_key, res['precos']['negociacao'])
+        st.info(f"Valor Selecionado: **{format_currency(valor_selecionado)}** ({st.session_state.tipo_preco_selecionado})")
+        
+        proposta_tecnica = st.text_area("Proposta Técnica", height=100)
+        proposta = st.text_area("Proposta / Escopo (Etapas, Entregas, Prazos)", height=150)
+        equipe = st.text_area("Equipe (Uma pessoa por linha)", height=100)
+        modalidade_pagamento = st.text_area("Modalidade de Pagamento", height=80)
+        opcoes_pagamento_sel = st.multiselect("Opções de Pagamento", OPCOES_PAGAMENTO, default=["Pix"])
+        
+        st.markdown("---")
+        b1, b2 = st.columns(2)
+        
+        data = {
+            'proponente': proponente, 'contratante': contratante, 'titulo': titulo,
+            'resumo_projeto': resumo_projeto, 'proposta_tecnica': proposta_tecnica,
+            'proposta': proposta, 'equipe': equipe, 'modalidade_pagamento': modalidade_pagamento,
+            'opcoes_pagamento': opcoes_pagamento_sel, 'valor_selecionado': valor_selecionado,
+            'valor_formatado': format_currency(valor_selecionado), 'tipo_preco_key': tipo_preco_key,
+            'tipo_preco_nome': st.session_state.tipo_preco_selecionado
         }
 
-with col_right:
-    if st.session_state.calculated:
-        res = st.session_state.results
-        inp = st.session_state.inputs
+        with b1:
+            if st.button("📄 Gerar Orçamento Cliente (PDF)", use_container_width=True):
+                try:
+                    pdf_bytes, filename = generate_proposal_pdf(data)
+                    log_budget_action(proponente, contratante, st.session_state.tipo_preco_selecionado, valor_selecionado, res)
+                    st.download_button("⬇️ Baixar Orçamento", pdf_bytes, filename, "application/pdf")
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
         
-        st.subheader("📈 Detalhes técnicos e downloads")
-        
-        # Destaque Visual
-        m1, m2, m3 = st.columns(3)
-        with m1:
-            st.markdown(f"""<div class="metric-container"><div class="metric-label">Preço Final</div><div class="metric-value">{format_currency(res['preco_final'])}</div></div>""", unsafe_allow_html=True)
-        with m2:
-            st.markdown(f"""<div class="metric-container"><div class="metric-label">Margem Líquida</div><div class="metric-value">{res['margem_liquida']:.1f}%</div></div>""", unsafe_allow_html=True)
-        with m3:
-            st.markdown(f"""<div class="metric-container"><div class="metric-label">Prazo Estimado</div><div class="metric-value">{res['dias_projeto']:.1f} dias</div></div>""", unsafe_allow_html=True)
-        
-        # Detalhes Técnicos
-        with st.expander("Ver Detalhamento Técnico Completo", expanded=True):
-            st.markdown(f"""
-            - **Área:** {inp['area']}
-            - **Serviço:** {inp['service']}
-            - **Valor Hora Base:** {format_currency(inp['valor_hora_base'])}
-            - **Valor Hora Ajustado:** {format_currency(res['valor_hora_ajustado'])}
-            - **Horas Totais:** {inp['horas_totais']}h
-            - **Dias Estimados:** {res['dias_projeto']:.1f} dias
-            - **Índice Equipe:** {res['indice_equipe']:.3f}
-            - **Redutor Aplicado:** {inp['percentual_redutor']}%
-            - **Valor Base do Projeto:** {format_currency(res['valor_base_projeto'])}
-            - **Preço Negociação:** {format_currency(res['preco_negociacao'])}
-            - **Preço Médio:** {format_currency(res['preco_medio'])}
-            - **Preço Mínimo:** {format_currency(res['preco_minimo'])}
-            - **Preço Final Selecionado:** {format_currency(res['preco_final'])}
-            - **Margem Líquida:** {res['margem_liquida']:.2f}%
-            """)
-        
-        # Botões de Download
-        st.markdown("### 📥 Downloads")
-        pdf_data = {**inp, **res}
-        
-        d_col1, d_col2 = st.columns(2)
-        with d_col1:
-            client_pdf = generate_client_pdf(pdf_data)
-            st.download_button(
-                label="📄 Baixar Orçamento Profissional",
-                data=client_pdf,
-                file_name=f"Orcamento_{inp['service'].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        with d_col2:
-            internal_pdf = generate_internal_pdf(pdf_data)
-            st.download_button(
-                label="🔒 Baixar Documento Interno",
-                data=internal_pdf,
-                file_name=f"Interno_{inp['service'].replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-    else:
-        st.info("Configure os parâmetros à esquerda e clique em 'Calcular orçamento' para visualizar os resultados e baixar os documentos.")
+        with b2:
+            if st.button("📊 Gerar Documento Interno (PDF)", use_container_width=True):
+                try:
+                    pdf_bytes, filename = generate_internal_pdf(res, data)
+                    st.download_button("⬇️ Baixar Doc Interno", pdf_bytes, filename, "application/pdf")
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF Interno: {e}")
 
-# --- RODAPÉ FIXO ---
-st.markdown("""
-    <div class="footer">
-        Consilius Business 2026 | Sistema de precificação oficial
-    </div>
-    """, unsafe_allow_html=True)
+# Rodapé Fixo
+st.markdown("---")
+st.markdown("<div style='text-align: center; color: gray;'>Sistema de Orçamento SV 1.0<br>Consilius Business</div>", unsafe_allow_html=True)
